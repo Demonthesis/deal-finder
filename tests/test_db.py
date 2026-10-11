@@ -25,7 +25,7 @@ def columns(conn, table) -> set[str]:
 
 def test_migrate_creates_schema(conn):
     applied = db.migrate(conn)
-    assert applied == ["0001_initial.sql"]
+    assert applied == [m.name for m in db.load_migrations()]
     assert db.schema_version(conn) == len(db.load_migrations())
     assert {"sites", "site_group_sites", "listings", "price_history", "alerts_sent"} <= (
         table_names(conn)

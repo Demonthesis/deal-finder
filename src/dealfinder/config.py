@@ -5,6 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote_plus
 
 import yaml
 from pydantic import (
@@ -74,17 +75,53 @@ class RateLimit(StrictModel):
         return self.per_seconds / self.requests
 
 
+class CssSelectors(StrictModel):
+    """CSS selectors for adapter css. `listing` selects one element per listing; the
+    others are relative to it. Each may end in `@attr` to read an attribute instead of text."""
+
+    listing: Term
+    title: Term
+    url: Term = "a@href"
+    price: Term
+    condition: Term | None = None
+
+
 class Site(StrictModel):
     name: Name
     url: HttpUrl
     adapter: AdapterType
     rate_limit: RateLimit
     fetcher: FetcherType = FetcherType.HTTP
+    search_url: str | None = Field(
+        default=None,
+        description="Search page for one item; {query} is replaced by the URL-encoded query. "
+        "Without it the site's url is fetched as is (a feed or category page).",
+    )
+    selectors: CssSelectors | None = None
+
+    @model_validator(mode="after")
+    def _check_adapter_settings(self) -> Site:
+        if self.search_url is not None:
+            if "{query}" not in self.search_url:
+                raise ValueError("search_url must contain {query}")
+            HttpUrl(self.search_url.replace("{query}", "q"))
+        if self.adapter == AdapterType.CSS and self.selectors is None:
+            raise ValueError("adapter css needs selectors")
+        if self.adapter != AdapterType.CSS and self.selectors is not None:
+            raise ValueError("selectors are only used by adapter css")
+        return self
+
+    def page_url(self, query: str) -> str:
+        """The page to fetch for `query`."""
+        if self.search_url is None:
+            return str(self.url)
+        return self.search_url.replace("{query}", quote_plus(query))
 
 
 class SiteGroup(StrictModel):
     name: Name
     sites: list[Site] = Field(min_length=1)
+    interval_minutes: int = Field(default=60, ge=5, description="How often to check.")
 
     @model_validator(mode="after")
     def _unique_site_names(self) -> SiteGroup:
@@ -95,6 +132,9 @@ class SiteGroup(StrictModel):
 class WatchItem(StrictModel):
     name: Name | None = None
     keywords: list[Term] = Field(min_length=1)
+    query: Term | None = Field(
+        default=None, description="Search text sent to sites; defaults to the keywords."
+    )
     exclude: list[Term] = Field(default_factory=list)
     max_price: float = Field(gt=0)
     currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
@@ -115,6 +155,10 @@ class WatchItem(StrictModel):
     def label(self) -> str:
         return self.name or " ".join(self.keywords)
 
+    @property
+    def search_query(self) -> str:
+        return self.query or " ".join(self.keywords)
+
 
 class Watchlist(StrictModel):
     name: Name
@@ -127,9 +171,44 @@ class Watchlist(StrictModel):
         return self
 
 
+class LLMProvider(StrEnum):
+    ANTHROPIC = "anthropic"
+    OPENAI_COMPATIBLE = "openai_compatible"  # e.g. Z.ai GLM via its OpenAI-style endpoint
+
+
+class LLMSettings(StrictModel):
+    """The model used for adapter llm. API keys come from environment variables."""
+
+    provider: LLMProvider = LLMProvider.ANTHROPIC
+    model: Name = "claude-haiku-5-5"
+    base_url: HttpUrl | None = Field(
+        default=None, description="Endpoint for openai_compatible, e.g. https://api.z.ai/api/paas/v4"
+    )
+    api_key_env: Name | None = Field(
+        default=None,
+        description="Env var holding the key; defaults to ANTHROPIC_API_KEY or LLM_API_KEY.",
+    )
+    daily_token_budget: int = Field(
+        default=2_000_000, ge=0, description="Input + output tokens per day; 0 means no limit."
+    )
+
+    @model_validator(mode="after")
+    def _base_url_for_openai(self) -> LLMSettings:
+        if self.provider == LLMProvider.OPENAI_COMPATIBLE and self.base_url is None:
+            raise ValueError("provider openai_compatible needs base_url")
+        return self
+
+    @property
+    def key_env(self) -> str:
+        if self.api_key_env:
+            return self.api_key_env
+        return "ANTHROPIC_API_KEY" if self.provider == LLMProvider.ANTHROPIC else "LLM_API_KEY"
+
+
 class Config(StrictModel):
     site_groups: list[SiteGroup] = Field(min_length=1)
     watchlists: list[Watchlist] = Field(default_factory=list)
+    llm: LLMSettings = Field(default_factory=LLMSettings)
 
     @model_validator(mode="after")
     def _check_references(self) -> Config:

@@ -3,6 +3,7 @@ import sqlite3
 import yaml
 from typer.testing import CliRunner
 
+from dealfinder import db
 from dealfinder.cli import app
 from tests.conftest import EXAMPLE_CONFIG
 
@@ -43,7 +44,7 @@ def test_init_db(tmp_path):
     db_path = tmp_path / "sub" / "deals.db"
     result = runner.invoke(app, ["init-db", "--db", str(db_path), "-c", str(EXAMPLE_CONFIG)])
     assert result.exit_code == 0, result.output
-    assert "Applied 1 migration(s)" in result.output
+    assert f"Applied {len(db.load_migrations())} migration(s)" in result.output
     assert "Synced 5 site(s)" in result.output
 
     with sqlite3.connect(db_path) as conn:

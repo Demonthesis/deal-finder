@@ -6,9 +6,17 @@
 #            for sites whose listings are built with JavaScript (needs the `browser` extra)
 # condition: new | new_with_tags | open_box | refurbished | excellent | good | fair | used
 #            (omit or leave empty to accept any condition)
+# search_url: page to fetch for one item; {query} becomes the item's search text.
+#            Without it the site's url is fetched as is (for a feed or category page).
+# selectors: for adapter css -- listing, title, url (default a@href), price, condition;
+#            each is a CSS selector, optionally ending in @attribute.
+# interval_minutes (per site group): how often to check, default 60.
+#
+# The search URLs below are first guesses; each site gets checked properly in docs/sites.md.
 
 site_groups:
   - name: resale-clothing
+    interval_minutes: 30
     sites:
       - name: ebay
         url: https://www.ebay.com
@@ -16,10 +24,13 @@ site_groups:
         rate_limit: {requests: 5, per_seconds: 1}
       - name: grailed
         url: https://www.grailed.com
-        adapter: css
+        search_url: https://www.grailed.com/shop?query={query}
+        adapter: llm
+        fetcher: browser
         rate_limit: {requests: 1, per_seconds: 10}
       - name: poshmark
         url: https://poshmark.com
+        search_url: https://poshmark.com/search?query={query}&type=listings
         adapter: llm
         rate_limit: {requests: 1, per_seconds: 15}
 
@@ -34,9 +45,16 @@ site_groups:
         adapter: api
         rate_limit: {requests: 5, per_seconds: 1}
       - name: slickdeals
-        url: https://slickdeals.net/newsearch.php?rss=1
+        url: https://slickdeals.net
+        search_url: https://slickdeals.net/newsearch.php?q={query}&searcharea=deals&rss=1
         adapter: rss
         rate_limit: {requests: 1, per_seconds: 60}
+
+# Model for adapter llm. Key from ANTHROPIC_API_KEY (or api_key_env).
+llm:
+  provider: anthropic
+  model: claude-haiku-5-5
+  daily_token_budget: 2000000
 
 watchlists:
   - name: Wardrobe upgrades

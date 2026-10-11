@@ -19,6 +19,7 @@ import random
 import re
 import threading
 import time
+import warnings
 from collections import deque
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
@@ -28,7 +29,7 @@ from urllib.parse import quote, unquote, urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup, Comment, XMLParsedAsHTMLWarning
 from markdownify import markdownify
 
 from dealfinder.config import Config, FetcherType, RateLimit, Site
@@ -637,7 +638,9 @@ def clean_html(html: str, base_url: str | None = None) -> str:
     role=main / a single <article>), makes links absolute, and replaces images with their
     alt text. Links are kept because listing URLs are what extractors need.
     """
-    soup = BeautifulSoup(html, "lxml")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", XMLParsedAsHTMLWarning)  # feeds fetched for adapter rss
+        soup = BeautifulSoup(html, "lxml")
     for tag in soup(_DROP_TAGS):
         tag.decompose()
     for comment in soup.find_all(string=lambda s: isinstance(s, Comment)):

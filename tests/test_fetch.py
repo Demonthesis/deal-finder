@@ -74,7 +74,7 @@ class Server:
 
 
 def site(name: str, url: str, requests: int = 1, per_seconds: float = 10, **kw) -> Site:
-    return Site(name=name, url=url, adapter="css",
+    return Site(name=name, url=url, adapter="llm",
                 rate_limit=RateLimit(requests=requests, per_seconds=per_seconds), **kw)
 
 
@@ -481,6 +481,7 @@ class FakeRenderer:
 
 def test_site_can_switch_to_browser_in_config(make, example_data):
     example_data["site_groups"][0]["sites"][2]["fetcher"] = "browser"  # poshmark
+    example_data["site_groups"][0]["sites"][1]["fetcher"] = "http"  # grailed
     cfg = parse_config(example_data)
     assert cfg.sites()["poshmark"].fetcher is FetcherType.BROWSER
     assert cfg.sites()["grailed"].fetcher is FetcherType.HTTP
