@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<form class="row" method="get">
+  <label>Watchlist
+    <select name="watchlist"><option value="">All</option>
+    {% for wl in config.watchlists %}<option {{ 'selected' if filters.watchlist == wl.name }}>{{ wl.name }}</option>{% endfor %}
+    </select></label>
+  <label>Site
+    <select name="site"><option value="">All</option>
+    {% for name in config.sites() %}<option {{ 'selected' if filters.site == name }}>{{ name }}</option>{% endfor %}
+    </select></label>
+  <label>Min score <input type="number" name="min_score" value="{{ filters.min_score|int }}" min="0" max="100" style="width:5rem"></label>
+  <label>Last days <input type="number" name="days" value="{{ filters.days }}" min="1" style="width:5rem"></label>
+  <label>Sort
+    <select name="sort">
+      <option value="new" {{ 'selected' if filters.sort == 'new' }}>Newest</option>
+      <option value="score" {{ 'selected' if filters.sort == 'score' }}>Best score</option>
+    </select></label>
+  <button>Filter</button>
+</form>
+
+{% if not rows %}
+<p class="muted">No deals in this period yet. Deals appear here after a run finds a match at or under its target price.</p>
+{% else %}
+<table>
+  <tr><th>Item</th><th>Listing</th><th class="num">Price</th><th class="num">vs median</th><th>Site</th><th class="num">Score</th><th>Found</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.item }}<div class="muted">{{ r.watchlist }}</div></td>
+    <td><a href="{{ r.url }}" target="_blank" rel="noopener noreferrer">{{ r.title }}</a>
+        <div class="muted">{{ (r.condition or 'condition ?')|replace('_', ' ') }}{% if not r.in_stock %} · <span class="bad">sold</span>{% endif %}</div></td>
+    <td class="num">{{ '%.2f'|format(r.price) if r.price is not none }} {{ r.currency }}
+      {% if r.price is not none and r.flagged_price is not none and r.price != r.flagged_price %}<div class="muted">flagged at {{ '%.2f'|format(r.flagged_price) }}</div>{% endif %}</td>
+    <td class="num">{% if r.median_price and r.price is not none %}<span class="good">{{ '%.0f'|format(100 * (r.median_price - r.price) / r.median_price) }}%</span> <div class="muted">median {{ '%.2f'|format(r.median_price) }}</div>{% else %}<span class="muted">–</span>{% endif %}</td>
+    <td>{{ r.site }}</td>
+    <td class="num">{{ '%.0f'|format(r.score) }}</td>
+    <td class="muted">{{ r.flagged_at[:16]|replace('T', ' ') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

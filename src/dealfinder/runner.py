@@ -216,27 +216,70 @@ class Pipeline:
         return self.alerts.flush()
 
 
-def serve(config: Config, db_path: Path | str = db.DEFAULT_DB_PATH, *,
+def serve(config_path: Path, db_path: Path | str = db.DEFAULT_DB_PATH, *,
           extra: Callable[[], None] | None = None) -> None:
     """Run every site group on its interval until interrupted.
 
-    `extra`, if given, is called in the main thread after the scheduler starts (the web app
-    uses it) and the scheduler stops when it returns.
+    The config file is re-read before each job when it has changed (the web app edits it);
+    the pipeline is rebuilt and the group schedule updated. A broken edit is logged and the
+    previous config kept. `extra`, if given, runs in the main thread (the web server) and
+    the scheduler stops when it returns.
     """
+    import threading
+
     from apscheduler.executors.pool import ThreadPoolExecutor
     from apscheduler.schedulers.background import BackgroundScheduler
 
-    state: dict[str, Pipeline] = {}
+    from dealfinder.config import ConfigError, load_config
+
+    config_path = Path(config_path)
+    state: dict = {"config": load_config(config_path), "mtime": config_path.stat().st_mtime}
+    scheduler = BackgroundScheduler(executors={"default": ThreadPoolExecutor(1)}, timezone=UTC)
+
+    def schedule_groups(config: Config, first: bool = False) -> None:
+        wanted = {f"group:{g.name}": g for g in config.site_groups}
+        for job in scheduler.get_jobs():
+            if job.id.startswith("group:") and job.id not in wanted:
+                job.remove()
+        now = datetime.now(UTC)
+        for i, (job_id, group) in enumerate(wanted.items()):
+            seconds = group.interval_minutes * 60
+            existing = scheduler.get_job(job_id)
+            if existing is not None and existing.trigger.interval.total_seconds() == seconds:
+                continue
+            scheduler.add_job(
+                run_group, "interval", args=[group.name], seconds=seconds,
+                jitter=min(120, seconds // 10), coalesce=True, max_instances=1,
+                misfire_grace_time=seconds, id=job_id, replace_existing=True,
+                next_run_time=now + timedelta(seconds=(10 + 30 * i if first else 5)
+                                              + random.uniform(0, 20)),
+            )
+            log.info("site group %s: every %d min", group.name, group.interval_minutes)
 
     def pipeline() -> Pipeline:
-        # Built lazily in the single worker thread, which then owns it.
+        # Runs in the single worker thread, which owns the pipeline.
+        mtime = config_path.stat().st_mtime
+        if mtime != state["mtime"]:
+            state["mtime"] = mtime
+            try:
+                config = load_config(config_path)
+            except ConfigError as exc:
+                log.error("config change ignored, %s", exc)
+            else:
+                log.info("config changed; reloading")
+                state["config"] = config
+                if "p" in state:
+                    state.pop("p").close()
+                schedule_groups(config)
         if "p" not in state:
-            state["p"] = Pipeline.build(config, db_path)
+            state["p"] = Pipeline.build(state["config"], db_path)
         return state["p"]
 
     def run_group(name: str) -> None:
         try:
-            pipeline().run_group(name)
+            p = pipeline()
+            if name in {g.name for g in p.config.site_groups}:
+                p.run_group(name)
         except Exception:
             log.exception("run of %s failed", name)
 
@@ -246,17 +289,7 @@ def serve(config: Config, db_path: Path | str = db.DEFAULT_DB_PATH, *,
         except Exception:
             log.exception("alert flush failed")
 
-    scheduler = BackgroundScheduler(executors={"default": ThreadPoolExecutor(1)}, timezone=UTC)
-    now = datetime.now(UTC)
-    for i, group in enumerate(config.site_groups):
-        seconds = group.interval_minutes * 60
-        scheduler.add_job(
-            run_group, "interval", args=[group.name], seconds=seconds,
-            jitter=min(120, seconds // 10), coalesce=True, max_instances=1,
-            misfire_grace_time=seconds, id=f"group:{group.name}",
-            next_run_time=now + timedelta(seconds=10 + 30 * i + random.uniform(0, 20)),
-        )
-        log.info("site group %s: every %d min", group.name, group.interval_minutes)
+    schedule_groups(state["config"], first=True)
     scheduler.add_job(flush, "interval", minutes=FLUSH_MINUTES, coalesce=True, max_instances=1,
                       id="flush-alerts")
     scheduler.start()
@@ -264,8 +297,6 @@ def serve(config: Config, db_path: Path | str = db.DEFAULT_DB_PATH, *,
         if extra is not None:
             extra()
         else:
-            import threading
-
             threading.Event().wait()
     except (KeyboardInterrupt, SystemExit):
         pass

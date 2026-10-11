@@ -1,0 +1,20 @@
+<div class="card">
+{% if error %}
+  <div class="bad">{{ site.name }}: {{ error }}</div>
+{% elif not result.listings %}
+  <div class="muted">{{ site.name }} returned no listings for this search.</div>
+{% else %}
+  <div class="muted">{{ result.listings|length }} listing(s){% if result.usage.total %}, {{ '{:,}'.format(result.usage.total) }} LLM tokens{% endif %}{% if result.cached %} (cached){% endif %}</div>
+  <table>
+    <tr><th class="num">Price</th><th>Condition</th><th>Title</th><th>Stock</th></tr>
+    {% for l in result.listings %}
+    <tr>
+      <td class="num">{{ '%.2f'|format(l.price) if l.price is not none else '–' }} {{ l.currency }}</td>
+      <td class="muted">{{ l.condition.value|replace('_', ' ') if l.condition else '–' }}</td>
+      <td><a href="{{ l.url }}" target="_blank" rel="noopener noreferrer">{{ l.title }}</a></td>
+      <td>{{ '' if l.in_stock else 'sold' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+</div>

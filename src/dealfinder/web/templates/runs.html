@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>LLM tokens</h2>
+<p>Today: <strong>{{ '{:,}'.format(today) }}</strong>{% if budget %} of {{ '{:,}'.format(budget) }} ({{ '%.0f'|format(100 * today / budget) }}%){% endif %}.
+<span class="muted">When the daily budget is used up, llm sites are skipped until midnight UTC.</span></p>
+{% if daily %}
+<table>
+  <tr><th>Day</th><th>Model</th><th class="num">Calls</th><th class="num">Input</th><th class="num">Output</th></tr>
+  {% for d in daily %}
+  <tr><td>{{ d.day }}</td><td>{{ d.model }}</td><td class="num">{{ d.calls }}</td>
+      <td class="num">{{ '{:,}'.format(d.input) }}</td><td class="num">{{ '{:,}'.format(d.output) }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<h2>Runs</h2>
+{% if not rows %}<p class="muted">No runs yet. Start <code>dealfinder serve</code> or <code>dealfinder run-once</code>.</p>{% else %}
+<table>
+  <tr><th>Started</th><th>Site group</th><th class="num">Sites</th><th class="num">Failed</th><th class="num">Listings</th><th class="num">New deals</th><th class="num">Tokens</th><th>Problems</th></tr>
+  {% for r in rows %}
+  {% set errors = r.errors|from_json %}
+  <tr>
+    <td>{{ r.started_at[:16]|replace('T', ' ') }}{% if not r.finished_at %} <span class="muted">(running)</span>{% endif %}</td>
+    <td>{{ r.site_group }}</td>
+    <td class="num">{{ r.sites_checked }}</td>
+    <td class="num {{ 'bad' if r.sites_failed }}">{{ r.sites_failed }}</td>
+    <td class="num">{{ r.listings }}</td>
+    <td class="num {{ 'good' if r.deals }}">{{ r.deals }}</td>
+    <td class="num">{{ '{:,}'.format(r.input_tokens + r.output_tokens) }}</td>
+    <td>{% if errors %}<details><summary>{{ errors|length }}</summary><ul class="muted">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></details>{% else %}<span class="muted">–</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

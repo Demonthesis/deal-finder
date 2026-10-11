@@ -115,14 +115,40 @@ def run_once(
 def serve_cmd(
     config: ConfigOption = DEFAULT_CONFIG_PATH,
     db_path: DbOption = db.DEFAULT_DB_PATH,
+    host: Annotated[str, typer.Option(help="Web app address.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Web app port.")] = 8080,
+    web: Annotated[bool, typer.Option(help="Also serve the web app.")] = True,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
-    """Check each site group on its interval until stopped."""
+    """Check each site group on its interval, and serve the web app, until stopped.
+
+    The web app needs DEALFINDER_PASSWORD unless it only listens on localhost.
+    """
+    import os
+
     from dealfinder.runner import serve
 
     _setup_logging(verbose)
-    cfg = _load_or_exit(config)
-    serve(cfg, db_path)
+    _load_or_exit(config)
+    extra = None
+    if web:
+        import uvicorn
+
+        from dealfinder.web import create_app
+
+        password = os.environ.get("DEALFINDER_PASSWORD") or None
+        if password is None and host not in ("127.0.0.1", "localhost", "::1"):
+            typer.secho(f"Set DEALFINDER_PASSWORD to serve the web app on {host}",
+                        fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
+        web_app = create_app(config, db_path, password=password,
+                             session_secret=os.environ.get("DEALFINDER_SECRET"))
+
+        def extra() -> None:
+            logging.getLogger("dealfinder").info("web app on http://%s:%d", host, port)
+            uvicorn.run(web_app, host=host, port=port, log_level="warning")
+
+    serve(config, db_path, extra=extra)
 
 
 @app.command("test-site")

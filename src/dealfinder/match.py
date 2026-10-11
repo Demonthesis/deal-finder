@@ -15,10 +15,10 @@ when it was never flagged before or its price fell below the last flagged price,
 not a duplicate of a listing already flagged for the item in the last 14 days (same
 normalised title and rounded price, on any site).
 
-Score (0-100): 50 points for how far the price is under max_price, 35 for how far it is
-under the item's 30-day median (the latest price of each other listing of the item seen in
-the last 30 days; needs at least 3), and 15 for condition. Without a median the first 50
-points are scaled to 85.
+Score (0-100): 50 points for how far the price is under max_price (full marks at 50% under),
+35 for how far it is under the item's 30-day median (full marks at 40% under; the median is
+the latest price of each other listing of the item seen in the last 30 days, and needs at
+least 3), and 15 for condition. Without a median the first 50 points are scaled to 85.
 """
 
 from __future__ import annotations
@@ -49,6 +49,8 @@ MEDIAN_DAYS = 30
 MIN_MEDIAN_SAMPLES = 3
 DUPLICATE_DAYS = 14
 ACCESSORY_PRICE_RATIO = 0.25
+FULL_MARKS_UNDER_MAX = 0.5  # 50% under max_price earns all the price points
+FULL_MARKS_UNDER_MEDIAN = 0.4
 
 CONDITION_SCORE: dict[Condition | None, float] = {
     Condition.NEW: 1.0,
@@ -178,10 +180,13 @@ class MatchChecker:
 def score_listing(item: WatchItem, listing: Listing, median: float | None) -> float:
     if listing.price is None:
         return 0.0
-    under_max = min(1.0, max(0.0, (item.max_price - listing.price) / item.max_price))
+    def scaled(reference: float, full_marks: float) -> float:
+        return min(1.0, max(0.0, (reference - listing.price) / reference / full_marks))
+
+    under_max = scaled(item.max_price, FULL_MARKS_UNDER_MAX)
     condition = CONDITION_SCORE.get(listing.condition, 0.6)
     if median:
-        under_median = min(1.0, max(0.0, (median - listing.price) / median))
+        under_median = scaled(median, FULL_MARKS_UNDER_MEDIAN)
         points = 50 * under_max + 35 * under_median + 15 * condition
     else:
         points = 85 * under_max + 15 * condition

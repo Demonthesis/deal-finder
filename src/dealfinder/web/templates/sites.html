@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% macro site_fields(site=None) %}
+  <label>Name <input name="name" required value="{{ site.name if site }}"></label>
+  <label>Home URL <input name="url" type="url" required size="28" value="{{ site.url if site }}"></label>
+  <label>Search URL ({query} = item search) <input name="search_url" size="40" value="{{ site.search_url or '' if site }}" placeholder="https://example.com/search?q={query}"></label>
+  <label>Adapter
+    <select name="adapter">{% for a in adapters %}<option {{ 'selected' if site and site.adapter.value == a }}>{{ a }}</option>{% endfor %}</select></label>
+  <label>Fetcher
+    <select name="fetcher">
+      <option value="http">http</option>
+      <option value="browser" {{ 'selected' if site and site.fetcher.value == 'browser' }}>browser (JavaScript pages)</option>
+    </select></label>
+  <label>Requests <input name="requests" type="number" min="1" style="width:5rem" value="{{ site.rate_limit.requests if site else 1 }}"></label>
+  <label>per seconds <input name="per_seconds" type="number" min="0.1" step="0.1" style="width:6rem" value="{{ site.rate_limit.per_seconds if site else 10 }}"></label>
+  <div class="muted">CSS selectors (adapter css only; end with @attr to read an attribute):</div>
+  {% for k in ['listing', 'title', 'url', 'price', 'condition'] %}
+    <label>{{ k }} <input name="sel_{{ k }}" value="{{ site.selectors[k] or '' if site and site.selectors }}" placeholder="{{ 'a@href' if k == 'url' }}"></label>
+  {% endfor %}
+{% endmacro %}
+
+{% block content %}
+<p class="muted">Adapters: <strong>ebay_api</strong> / <strong>api</strong> use official APIs (keys in env vars);
+<strong>rss</strong> reads a feed; <strong>css</strong> reads a search page with selectors (no LLM cost);
+<strong>llm</strong> sends the cleaned page to the model. Sites that block bots in robots.txt are skipped automatically.</p>
+
+{% for g in config.site_groups %}
+<div class="card">
+  <div class="row"><h2 style="margin:0">{{ g.name }}</h2><span class="muted">every {{ g.interval_minutes }} min</span></div>
+  <table>
+    <tr><th>Site</th><th>Adapter</th><th>Search URL</th><th>Rate limit</th><th></th></tr>
+    {% for s in g.sites %}
+    <tr>
+      <td><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.name }}</a></td>
+      <td>{{ s.adapter.value }}{% if s.fetcher.value == 'browser' %} <span class="muted">(browser)</span>{% endif %}</td>
+      <td class="muted">{{ s.search_url or '(home URL)' }}</td>
+      <td class="muted">{{ s.rate_limit.requests }} / {{ s.rate_limit.per_seconds|round(1) }} s</td>
+      <td>
+        <form hx-post="/sites/{{ s.name|urlencode }}/test" hx-target="#test-{{ g.name }}-{{ loop.index }}" hx-indicator="#spin-{{ g.name }}-{{ loop.index }}" class="row">
+          <input name="query" placeholder="search text" size="14" required>
+          <button>Test this site</button>
+          <span id="spin-{{ g.name }}-{{ loop.index }}" class="htmx-indicator muted">fetching…</span>
+        </form>
+        <details><summary>Edit</summary>
+          <form method="post" action="/sites">
+            <input type="hidden" name="group" value="{{ g.name }}">
+            <input type="hidden" name="replace" value="{{ s.name }}">
+            {{ site_fields(s) }}
+            <button class="primary">Save</button>
+          </form>
+          <form method="post" action="/sites/{{ g.name|urlencode }}/{{ s.name|urlencode }}/delete"
+                onsubmit="return confirm('Remove {{ s.name }} from {{ g.name }}?')">
+            <button class="link">Remove from group</button></form>
+        </details>
+      </td>
+    </tr>
+    <tr><td colspan="5" id="test-{{ g.name }}-{{ loop.index }}" style="border:0;padding:0"></td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endfor %}
+
+<fieldset>
+  <legend>Add a site</legend>
+  <form method="post" action="/sites">
+    <label>Site group
+      <select name="group">{% for g in config.site_groups %}<option>{{ g.name }}</option>{% endfor %}</select></label>
+    {{ site_fields() }}
+    <button class="primary">Add</button>
+  </form>
+</fieldset>
+<style>.htmx-indicator { display: none; } .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }</style>
+{% endblock %}
