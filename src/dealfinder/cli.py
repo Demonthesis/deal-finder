@@ -160,5 +160,69 @@ def test_site(
     typer.echo(f"{len(result.listings)} listing(s), {result.usage.total:,} LLM tokens{extra}")
 
 
+@app.command("capture-page")
+def capture_page(
+    site_name: Annotated[str, typer.Argument(help="Site name from the config.")],
+    query: Annotated[str, typer.Argument(help="What to search for.")],
+    out: Annotated[Path, typer.Option("--out", help="Fixture directory.")] = Path("bakeoff"),
+    config: ConfigOption = DEFAULT_CONFIG_PATH,
+) -> None:
+    """Save a site's cleaned search page as a bake-off fixture (label meta.json afterwards)."""
+    import json
+    import re
+
+    from dealfinder.fetch import Fetcher
+
+    cfg = _load_or_exit(config)
+    site = cfg.sites().get(site_name)
+    if site is None:
+        typer.secho(f"Unknown site {site_name!r}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    with Fetcher.from_config(cfg) as fetcher:
+        page = fetcher.fetch(site.page_url(query))
+    name = re.sub(r"[^a-z0-9]+", "-", f"{site_name} {query}".lower()).strip("-")
+    target = out / name
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "page.md").write_text(page.text)
+    (target / "meta.json").write_text(json.dumps(
+        {"url": page.final_url, "site": site_name, "expected": []}, indent=2))
+    typer.echo(f"Saved {target} ({len(page.text):,} chars). Now fill in meta.json 'expected'.")
+
+
+@app.command("bakeoff")
+def bakeoff_cmd(
+    model: Annotated[list[str], typer.Option(
+        "--model", "-m",
+        help="anthropic:MODEL (ANTHROPIC_API_KEY) or openai:MODEL@BASE_URL (LLM_API_KEY). "
+             "Repeatable.")],
+    fixtures: Annotated[Path, typer.Option("--fixtures", help="Fixture directory.")] = Path("bakeoff"),
+) -> None:
+    """Compare LLM backends on labelled pages: accuracy, validity, latency and cost."""
+    from dealfinder.bakeoff import format_report, load_fixtures, run_bakeoff
+    from dealfinder.config import LLMSettings
+    from dealfinder.extract import LLMConfigError, backend_from_settings
+
+    backends = []
+    for spec in model:
+        provider, _, rest = spec.partition(":")
+        name, _, base_url = rest.partition("@")
+        try:
+            if provider == "anthropic":
+                settings = LLMSettings(provider="anthropic", model=name)
+            elif provider == "openai":
+                settings = LLMSettings(provider="openai_compatible", model=name, base_url=base_url)
+            else:
+                raise ValueError("provider must be anthropic or openai")
+            backends.append(backend_from_settings(settings))
+        except (ValueError, LLMConfigError) as exc:
+            typer.secho(f"--model {spec}: {exc}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1) from None
+    pages = load_fixtures(fixtures) if fixtures.is_dir() else []
+    if not pages:
+        typer.secho(f"No fixtures in {fixtures} (use capture-page)", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    typer.echo(format_report(run_bakeoff(backends, pages)))
+
+
 if __name__ == "__main__":
     app()
