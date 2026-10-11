@@ -1,5 +1,9 @@
 # List types (hunt modes)
 
+> **Plan, not built yet.** The config today has plain watchlists (keywords, exclude,
+> max_price, condition) in `config/watchlists.yaml`; see `docs/guide.md`. List modes, size
+> profiles, identifiers, coupon search and `buy_by` described below are future work.
+
 Every list has a **mode**. The mode decides which site group is searched, what counts as a match, and what
 counts as a "good deal". Lists live in `config/lists/*.yaml` (and later in the web UI).
 

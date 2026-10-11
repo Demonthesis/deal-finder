@@ -272,3 +272,12 @@ def test_bad_timezone_and_quiet_hours_are_config_errors(example_data):
     example_data["alerts"] = {"quiet_hours": {"start": "25:00", "end": "07:00"}}
     with pytest.raises(ConfigError):
         parse_config(example_data)
+
+
+def test_telegram_errors_do_not_leak_the_token():
+    def boom(request):
+        raise httpx.ConnectError(f"cannot reach {request.url}")
+
+    with pytest.raises(NotifyError) as exc_info:
+        TelegramNotifier("123:secret", "1", mock_http(boom)).send("t", "b")
+    assert "secret" not in str(exc_info.value) and "<token>" in str(exc_info.value)

@@ -213,3 +213,12 @@ def test_search_url_must_contain_query_placeholder():
         make_site("llm", search_url="https://shop.example/search")
     assert json.dumps(make_site("llm", search_url="https://s.example/?q={query}")
                       .page_url("a b&c")) == '"https://s.example/?q=a+b%26c"'
+
+
+def test_scraped_listings_must_link_back_to_the_site(server, ctx):
+    html = SEARCH_HTML.replace('href="/item/1"', 'href="https://evil.example/phish"')
+    html = html.replace('href="https://shop.example/item/2"', 'href="https://m.shop.example/item/2"')
+    server.routes[("shop.example", "/search")] = httpx.Response(
+        200, text=html, headers={"Content-Type": "text/html"})
+    site = make_site("css", search_url="https://shop.example/search?q={query}", selectors=SELECTORS)
+    assert [l.url for l in search(site, "x", ctx).listings] == ["https://m.shop.example/item/2"]

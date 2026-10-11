@@ -12,6 +12,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from importlib import resources
 from pathlib import Path
 
@@ -138,3 +139,12 @@ def sync_sites(conn: sqlite3.Connection, config: Config) -> int:
             [(g.name, s.name) for g in config.site_groups for s in g.sites],
         )
     return len(sites)
+
+
+def prune(conn: sqlite3.Connection, now: datetime) -> None:
+    """Drop cached LLM answers that are unlikely to be reused, so the database stays small."""
+    def ago(days: int) -> str:
+        return (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    conn.execute("DELETE FROM extraction_cache WHERE created_at < ?", (ago(14),))
+    conn.execute("DELETE FROM match_checks WHERE created_at < ?", (ago(180),))

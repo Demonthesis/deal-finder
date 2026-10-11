@@ -74,6 +74,18 @@ class AdapterContext:
         return [self.env[n] for n in names]
 
 
+def on_site(url: str, site: Site) -> bool:
+    """True if `url` is on the site's domain (or a subdomain of it)."""
+    host, home = domain_key(url), domain_key(str(site.url))
+    return host == home or host.endswith("." + home)
+
+
+def _own_links(listings: list[Listing], site: Site) -> list[Listing]:
+    # Scraped pages are untrusted: a listing must link back to the site it was found on, so
+    # a page (or text injected into it) can't steer alerts to some other website.
+    return [listing for listing in listings if on_site(listing.url, site)]
+
+
 def search(site: Site, query: str, ctx: AdapterContext) -> SearchResult:
     handler = _ADAPTERS[site.adapter]
     return handler(site, query, ctx)
@@ -87,7 +99,7 @@ def _llm(site: Site, query: str, ctx: AdapterContext) -> SearchResult:
         extraction = ctx.extractor.extract(page.text, page.final_url, site=site.name)
     except LLMConfigError as exc:
         raise AdapterUnavailable(f"{site.name}: {exc}") from exc
-    return SearchResult(extraction.listings, extraction.usage, extraction.cached)
+    return SearchResult(_own_links(extraction.listings, site), extraction.usage, extraction.cached)
 
 
 def _select(element: Tag, selector: str | None) -> str | None:
@@ -128,7 +140,8 @@ def parse_css(html: str, page_url: str, site_name: str, selectors: CssSelectors)
 def _css(site: Site, query: str, ctx: AdapterContext) -> SearchResult:
     assert site.selectors is not None  # enforced by the config schema
     page = ctx.fetcher.fetch(site.page_url(query))
-    return SearchResult(parse_css(page.html, page.final_url, site.name, site.selectors))
+    return SearchResult(_own_links(parse_css(page.html, page.final_url, site.name, site.selectors),
+                                   site))
 
 
 def parse_feed(xml: str, site_name: str) -> list[Listing]:

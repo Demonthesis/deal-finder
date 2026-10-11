@@ -209,3 +209,27 @@ def test_cli_run_once_and_test_site_report_errors(tmp_path, write_config):
     result = runner.invoke(app, ["test-site", "ebay", "sony", "-c", str(path),
                                  "--db", str(tmp_path / "d.db")], env={"EBAY_CLIENT_ID": ""})
     assert result.exit_code == 1 and "EBAY_CLIENT_ID" in result.output
+
+
+def test_unexpected_matching_error_only_fails_that_site(server, monkeypatch):
+    pipeline, notifier, _ = make_pipeline(server)
+    real = pipeline.matcher.process
+
+    def process(watchlist, item, listings):
+        if listings and listings[0].site == "shop":
+            raise RuntimeError("bug")
+        return real(watchlist, item, listings)
+
+    monkeypatch.setattr(pipeline.matcher, "process", process)
+    report = pipeline.run_group("retail")
+    assert any("shop: unexpected RuntimeError" in e for e in report.errors)
+    assert report.deals == 2  # feed and ai still ran
+
+
+def test_old_extraction_cache_is_pruned(server):
+    pipeline, _, _ = make_pipeline(server)
+    pipeline.conn.execute("INSERT INTO extraction_cache (content_hash, extractor, listings_json,"
+                          " created_at) VALUES ('h', 'e', '{}', '2026-01-01T00:00:00Z')")
+    pipeline.run_group("retail")
+    assert pipeline.conn.execute(
+        "SELECT COUNT(*) FROM extraction_cache WHERE content_hash = 'h'").fetchone()[0] == 0

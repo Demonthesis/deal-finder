@@ -158,6 +158,7 @@ class Pipeline:
             for site in group.sites:
                 self._run_site(site, watchlists, report, pages)
             report.alerts = self.alerts.flush()
+            db.prune(self.conn, self.clock())
         finally:
             self._set_run_id(None)
             self.conn.execute(
@@ -175,6 +176,15 @@ class Pipeline:
 
     def _run_site(self, site: Site, watchlists, report: RunReport,
                   pages: dict[str, SearchResult]) -> None:
+        try:
+            self._run_site_items(site, watchlists, report, pages)
+        except Exception as exc:  # a bug in one adapter or in matching must not stop the others
+            log.exception("%s failed", site.name)
+            report.errors.append(f"{site.name}: unexpected {type(exc).__name__}: {exc}")
+            report.sites_failed += 1
+
+    def _run_site_items(self, site: Site, watchlists, report: RunReport,
+                        pages: dict[str, SearchResult]) -> None:
         if site.adapter == AdapterType.LLM and self.ctx.extractor is not None:
             if self.ctx.extractor.budget_left() == 0:
                 report.errors.append(f"{site.name}: skipped, daily LLM token budget used up")
@@ -196,11 +206,6 @@ class Pipeline:
                     report.errors.append(f"{site.name} / {item.label}: {exc}")
                     failed = True
                     continue
-                except Exception as exc:  # a bug in one adapter must not stop the others
-                    log.exception("%s failed", site.name)
-                    report.errors.append(f"{site.name}: unexpected {type(exc).__name__}: {exc}")
-                    report.sites_failed += 1
-                    return
                 report.usage += result.usage
                 if not result.cached:
                     report.listings += len(result.listings)

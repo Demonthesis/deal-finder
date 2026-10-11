@@ -110,13 +110,17 @@ class TelegramNotifier:
     LIMIT = 4096
 
     def __init__(self, bot_token: str, chat_id: str, http: httpx.Client):
+        self.bot_token = bot_token
         self.url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         self.chat_id = chat_id
         self.http = http
 
     def send(self, title: str, body: str) -> None:
         text = f"{title}\n\n{body}"[: self.LIMIT]
-        _post(self.http, self.url, "Telegram", json={"chat_id": self.chat_id, "text": text})
+        try:
+            _post(self.http, self.url, "Telegram", json={"chat_id": self.chat_id, "text": text})
+        except NotifyError as exc:  # the token is part of the URL; keep it out of logs and the db
+            raise NotifyError(str(exc).replace(self.bot_token, "<token>")) from None
 
 
 class EmailNotifier:
