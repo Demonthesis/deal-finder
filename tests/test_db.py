@@ -27,7 +27,7 @@ def test_migrate_creates_schema(conn):
     applied = db.migrate(conn)
     assert applied == [m.name for m in db.load_migrations()]
     assert db.schema_version(conn) == len(db.load_migrations())
-    assert {"sites", "site_group_sites", "listings", "price_history", "alerts_sent"} <= (
+    assert {"sites", "site_group_sites", "listings", "price_history", "alerts", "matches", "runs"} <= (
         table_names(conn)
     )
     assert {"url", "title", "price", "currency", "seen_at"} <= columns(conn, "listings")
@@ -75,10 +75,12 @@ def test_sync_sites_and_relations(conn):
         (listing_id,),
     )
     alert = (listing_id, "Wardrobe upgrades", "Patagonia Better Sweater", 39.0)
-    sql = "INSERT INTO alerts_sent (listing_id, watchlist, item, price) VALUES (?, ?, ?, ?)"
+    sql = ("INSERT INTO alerts (listing_id, watchlist, item, price, channel, title, body,"
+           " created_at) VALUES (?, ?, ?, ?, 'console', 't', 'b', '2026-10-01T00:00:00Z')")
     conn.execute(sql, alert)
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute(sql, alert)  # one alert per listing/watchlist/item/channel
+        conn.execute(sql, alert)  # one alert per listing/watchlist/item/channel/price
+    conn.execute(sql, alert[:3] + (35.0,))  # a lower price is a new alert
 
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(

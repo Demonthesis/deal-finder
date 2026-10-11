@@ -56,6 +56,15 @@ llm:
   model: claude-haiku-5-5
   daily_token_budget: 2000000
 
+# Where deal alerts go: console | discord | ntfy | telegram | email.
+# Keys come from env vars (see README). quiet_hours and digest can also be set per item.
+alerts:
+  channel: console
+  timezone: America/New_York
+  quiet_hours: {start: "22:00", end: "07:00"}
+  digest: false
+  digest_time: "08:00"
+
 watchlists:
   - name: Wardrobe upgrades
     site_group: resale-clothing
@@ -69,6 +78,7 @@ watchlists:
         keywords: [red wing, iron ranger]
         exclude: [insoles, laces]
         max_price: 160
+        digest: true
 
   - name: Buy soon
     site_group: general-retail

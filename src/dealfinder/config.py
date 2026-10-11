@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import time
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote_plus
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 from pydantic import (
     AfterValidator,
+    BeforeValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -129,6 +132,28 @@ class SiteGroup(StrictModel):
         return self
 
 
+def _parse_clock(value: str) -> time:
+    try:
+        return time.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"{value!r} is not a time like 07:30") from None
+
+
+ClockTime = Annotated[time, BeforeValidator(lambda v: _parse_clock(v) if isinstance(v, str) else v)]
+
+
+class QuietHours(StrictModel):
+    """No instant alerts between start and end (local time); they are sent when it ends."""
+
+    start: ClockTime
+    end: ClockTime
+
+    def contains(self, now: time) -> bool:
+        if self.start <= self.end:
+            return self.start <= now < self.end
+        return now >= self.start or now < self.end  # spans midnight
+
+
 class WatchItem(StrictModel):
     name: Name | None = None
     keywords: list[Term] = Field(min_length=1)
@@ -140,6 +165,13 @@ class WatchItem(StrictModel):
     currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
     condition: list[Condition] = Field(
         default_factory=list, description="Accepted conditions; empty means any."
+    )
+    quiet_hours: QuietHours | None = Field(
+        default=None, description="Overrides alerts.quiet_hours for this item."
+    )
+    digest: bool | None = Field(
+        default=None, description="Overrides alerts.digest: true sends this item's deals "
+        "only in the daily digest."
     )
 
     @model_validator(mode="after")
@@ -205,10 +237,37 @@ class LLMSettings(StrictModel):
         return "ANTHROPIC_API_KEY" if self.provider == LLMProvider.ANTHROPIC else "LLM_API_KEY"
 
 
+class AlertChannel(StrEnum):
+    CONSOLE = "console"  # print to the log; for testing
+    DISCORD = "discord"  # DISCORD_WEBHOOK_URL
+    NTFY = "ntfy"  # NTFY_TOPIC_URL (optional NTFY_TOKEN)
+    TELEGRAM = "telegram"  # TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+    EMAIL = "email"  # SMTP_HOST, SMTP_USER, SMTP_PASSWORD, ALERT_EMAIL_TO (opt. SMTP_PORT)
+
+
+class AlertSettings(StrictModel):
+    channel: AlertChannel = AlertChannel.CONSOLE
+    timezone: str = "UTC"
+    quiet_hours: QuietHours | None = None
+    digest: bool = Field(
+        default=False, description="Send deals once a day in one message instead of instantly."
+    )
+    digest_time: ClockTime = time(8, 0)
+
+    @model_validator(mode="after")
+    def _known_timezone(self) -> AlertSettings:
+        try:
+            ZoneInfo(self.timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"unknown timezone {self.timezone!r}") from None
+        return self
+
+
 class Config(StrictModel):
     site_groups: list[SiteGroup] = Field(min_length=1)
     watchlists: list[Watchlist] = Field(default_factory=list)
     llm: LLMSettings = Field(default_factory=LLMSettings)
+    alerts: AlertSettings = Field(default_factory=AlertSettings)
 
     @model_validator(mode="after")
     def _check_references(self) -> Config:

@@ -82,3 +82,30 @@ CREATE TABLE match_checks (
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     PRIMARY KEY (title_hash, item_key)
 );
+
+-- Replaces alerts_sent (never used), which allowed one alert per listing and so blocked
+-- price-drop alerts. Alerts wait here as 'pending' during quiet hours or until the digest.
+DROP TABLE alerts_sent;
+CREATE TABLE alerts (
+    id         INTEGER PRIMARY KEY,
+    listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    watchlist  TEXT    NOT NULL,
+    item       TEXT    NOT NULL,
+    price      REAL    NOT NULL,
+    channel    TEXT    NOT NULL,
+    digest     INTEGER NOT NULL DEFAULT 0,
+    status     TEXT    NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    error      TEXT,
+    title      TEXT    NOT NULL,
+    body       TEXT    NOT NULL,
+    created_at TEXT    NOT NULL,
+    sent_at    TEXT,
+    UNIQUE (listing_id, watchlist, item, channel, price)
+);
+CREATE INDEX ix_alerts_status ON alerts(status);
+
+CREATE TABLE meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
