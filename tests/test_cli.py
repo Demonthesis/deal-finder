@@ -14,7 +14,7 @@ def test_validate_example_config():
     result = runner.invoke(app, ["validate-config", "--config", str(EXAMPLE_CONFIG)])
     assert result.exit_code == 0, result.output
     assert "OK:" in result.output
-    assert "2 site group(s), 5 site(s), 2 watchlist(s), 3 item(s)" in result.output
+    assert "2 site group(s), 4 site(s), 2 watchlist(s), 3 item(s)" in result.output
 
 
 def test_validate_invalid_config(example_data, write_config):
@@ -45,10 +45,10 @@ def test_init_db(tmp_path):
     result = runner.invoke(app, ["init-db", "--db", str(db_path), "-c", str(EXAMPLE_CONFIG)])
     assert result.exit_code == 0, result.output
     assert f"Applied {len(db.load_migrations())} migration(s)" in result.output
-    assert "Synced 5 site(s)" in result.output
+    assert "Synced 4 site(s)" in result.output
 
     with sqlite3.connect(db_path) as conn:
-        assert conn.execute("SELECT count(*) FROM sites").fetchone()[0] == 5
+        assert conn.execute("SELECT count(*) FROM sites").fetchone()[0] == 4
 
     again = runner.invoke(app, ["init-db", "--db", str(db_path)])
     assert again.exit_code == 0

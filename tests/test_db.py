@@ -56,8 +56,8 @@ def test_failed_migration_rolls_back(conn, monkeypatch):
 def test_sync_sites_and_relations(conn):
     db.migrate(conn)
     cfg = load_config(EXAMPLE_CONFIG)
-    assert db.sync_sites(conn, cfg) == 5
-    assert db.sync_sites(conn, cfg) == 5  # rerun is an upsert
+    assert db.sync_sites(conn, cfg) == 4
+    assert db.sync_sites(conn, cfg) == 4  # rerun is an upsert
 
     groups = conn.execute(
         """SELECT g.site_group FROM site_group_sites g JOIN sites s ON s.id = g.site_id

@@ -43,12 +43,18 @@ def load_migrations() -> list[Migration]:
     return migrations
 
 
-def connect(path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
+def connect(path: Path | str = DEFAULT_DB_PATH, *, check_same_thread: bool = True,
+            ) -> sqlite3.Connection:
+    """Open the database. Pass check_same_thread=False only when the caller serialises all
+    use of the connection itself (the scheduler's single worker thread does)."""
     if str(path) != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, autocommit=True)
+    conn = sqlite3.connect(path, autocommit=True, check_same_thread=check_same_thread,
+                           timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    if str(path) != ":memory:":
+        conn.execute("PRAGMA journal_mode = WAL")  # the web app reads while a run writes
     return conn
 
 

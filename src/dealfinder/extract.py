@@ -19,6 +19,7 @@ import os
 import re
 import sqlite3
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol, TypeVar
@@ -259,8 +260,8 @@ class OpenAICompatibleBackend:
         raise AssertionError("unreachable")
 
 
-def backend_from_settings(settings: LLMSettings) -> LLMBackend:
-    api_key = os.environ.get(settings.key_env)
+def backend_from_settings(settings: LLMSettings, env: Mapping[str, str] | None = None) -> LLMBackend:
+    api_key = (os.environ if env is None else env).get(settings.key_env)
     if not api_key:
         raise LLMConfigError(f"{settings.key_env} is not set")
     if settings.provider == LLMProvider.ANTHROPIC:

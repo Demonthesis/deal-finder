@@ -44,11 +44,7 @@ site_groups:
         url: https://www.bestbuy.com
         adapter: api
         rate_limit: {requests: 5, per_seconds: 1}
-      - name: slickdeals
-        url: https://slickdeals.net
-        search_url: https://slickdeals.net/newsearch.php?q={query}&searcharea=deals&rss=1
-        adapter: rss
-        rate_limit: {requests: 1, per_seconds: 60}
+      # slickdeals: unsupported -- robots.txt disallows its RSS search (see docs/sites.md)
 
 # Model for adapter llm. Key from ANTHROPIC_API_KEY (or api_key_env).
 llm:
