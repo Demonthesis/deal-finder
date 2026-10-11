@@ -1,0 +1,63 @@
+# Deal Finder watchlists.
+# Check with: dealfinder validate-config
+#
+# adapter:   ebay_api | api | rss | css | llm
+# fetcher:   http (default) | browser   -- browser renders the page in headless Chromium,
+#            for sites whose listings are built with JavaScript (needs the `browser` extra)
+# condition: new | new_with_tags | open_box | refurbished | excellent | good | fair | used
+#            (omit or leave empty to accept any condition)
+
+site_groups:
+  - name: resale-clothing
+    sites:
+      - name: ebay
+        url: https://www.ebay.com
+        adapter: ebay_api
+        rate_limit: {requests: 5, per_seconds: 1}
+      - name: grailed
+        url: https://www.grailed.com
+        adapter: css
+        rate_limit: {requests: 1, per_seconds: 10}
+      - name: poshmark
+        url: https://poshmark.com
+        adapter: llm
+        rate_limit: {requests: 1, per_seconds: 15}
+
+  - name: general-retail
+    sites:
+      - name: ebay
+        url: https://www.ebay.com
+        adapter: ebay_api
+        rate_limit: {requests: 5, per_seconds: 1}
+      - name: bestbuy
+        url: https://www.bestbuy.com
+        adapter: api
+        rate_limit: {requests: 5, per_seconds: 1}
+      - name: slickdeals
+        url: https://slickdeals.net/newsearch.php?rss=1
+        adapter: rss
+        rate_limit: {requests: 1, per_seconds: 60}
+
+watchlists:
+  - name: Wardrobe upgrades
+    site_group: resale-clothing
+    items:
+      - name: Patagonia Better Sweater
+        keywords: [patagonia, better sweater, 1/4 zip]
+        exclude: [womens, kids, vest]
+        max_price: 45
+        condition: [new_with_tags, excellent, good]
+      - name: Red Wing Iron Ranger
+        keywords: [red wing, iron ranger]
+        exclude: [insoles, laces]
+        max_price: 160
+
+  - name: Buy soon
+    site_group: general-retail
+    items:
+      - name: Sony WH-1000XM6
+        keywords: [sony, wh-1000xm6]
+        exclude: [case, ear pads, cable]
+        max_price: 330
+        currency: USD
+        condition: [new, open_box, refurbished, excellent]
