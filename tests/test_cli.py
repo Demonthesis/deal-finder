@@ -61,3 +61,12 @@ def test_init_db_rejects_bad_config(tmp_path, write_config):
     result = runner.invoke(app, ["init-db", "--db", str(db_path), "-c", str(path)])
     assert result.exit_code == 1
     assert not db_path.exists()
+
+
+def test_serve_needs_password_off_localhost(tmp_path, monkeypatch):
+    monkeypatch.delenv("DEALFINDER_PASSWORD", raising=False)
+    monkeypatch.setenv("DEALFINDER_HOST", "0.0.0.0")
+    result = runner.invoke(app, ["serve", "-c", str(EXAMPLE_CONFIG),
+                                 "--db", str(tmp_path / "t.db")])
+    assert result.exit_code == 1
+    assert "Set DEALFINDER_PASSWORD to serve the web app on 0.0.0.0" in result.output

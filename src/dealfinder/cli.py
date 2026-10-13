@@ -115,7 +115,7 @@ def run_once(
 def serve_cmd(
     config: ConfigOption = DEFAULT_CONFIG_PATH,
     db_path: DbOption = db.DEFAULT_DB_PATH,
-    host: Annotated[str, typer.Option(help="Web app address.")] = "127.0.0.1",
+    host: Annotated[str, typer.Option(help="Web app address.", envvar="DEALFINDER_HOST")] = "127.0.0.1",
     port: Annotated[int, typer.Option(help="Web app port.")] = 8080,
     web: Annotated[bool, typer.Option(help="Also serve the web app.")] = True,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,

@@ -149,18 +149,26 @@ llm:
 
 ## Deploy and update
 
-The service runs on Debian (for example a Proxmox LXC with 1 vCPU, 1 GB RAM, 8 GB disk):
+The service runs on Debian (for example a Proxmox LXC with 1 vCPU, 1 GB RAM, 8 GB disk).
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first; the install
+script doesn't download it, and stops if it can't find uv.
 
 ```sh
-git clone <this repo> /root/deal-finder && cd /root/deal-finder
+git clone https://github.com/Demonthesis/deal-finder.git /root/deal-finder && cd /root/deal-finder
 deploy/install.sh              # or BROWSER=1 deploy/install.sh for fetcher: browser sites
-nano /etc/dealfinder/env       # DEALFINDER_PASSWORD, keys; see deploy/env.example
+nano /etc/dealfinder/env       # DEALFINDER_HOST, keys; see deploy/env.example
 systemctl restart dealfinder
 ```
 
 - Code: `/opt/dealfinder`. Data and config: `/var/lib/dealfinder` (mount a persistent volume
   there). Secrets: `/etc/dealfinder/env`, readable only by root and the service.
-- Web app: `http://<container-ip>:8080`.
+- **Web app access**, set in `/etc/dealfinder/env`:
+  - `DEALFINDER_HOST=127.0.0.1` (the default): the web app is reachable only from inside the
+    container. Put a tunnel or reverse proxy in front that does its own login (for example
+    Cloudflare Tunnel + Access pointing at `http://127.0.0.1:8080`), and leave
+    `DEALFINDER_PASSWORD` empty so you don't log in twice.
+  - `DEALFINDER_HOST=0.0.0.0`: the web app is at `http://<container-ip>:8080` on your network,
+    and `DEALFINDER_PASSWORD` is required (the service won't start without it).
 - Logs: `journalctl -u dealfinder -f`.
 - **Update:** `cd /root/deal-finder && git pull && deploy/install.sh`. It replaces the code,
   applies database migrations, keeps data, config and secrets, and restarts the service.

@@ -1,5 +1,5 @@
 [Unit]
-Description=Deal Finder (watches sites for deals, web app on :8080)
+Description=Deal Finder (watches sites for deals, web app on port 8080)
 Wants=network-online.target
 After=network-online.target
 
@@ -9,13 +9,14 @@ User=dealfinder
 Group=dealfinder
 # Persistent data (database, HTTP cache, config) lives here; mount a volume at this path.
 WorkingDirectory=/var/lib/dealfinder
-# API keys, alert channel keys and DEALFINDER_PASSWORD (see deploy/env.example).
+# API keys, alert channel keys, DEALFINDER_HOST and DEALFINDER_PASSWORD (see deploy/env.example).
+# The web app's address comes from DEALFINDER_HOST (default 127.0.0.1).
 EnvironmentFile=/etc/dealfinder/env
 Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/dealfinder/browsers
 ExecStart=/opt/dealfinder/.venv/bin/dealfinder serve \
     --config /var/lib/dealfinder/watchlists.yaml \
     --db /var/lib/dealfinder/dealfinder.db \
-    --host 0.0.0.0 --port 8080
+    --port 8080
 Restart=on-failure
 RestartSec=30
 

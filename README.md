@@ -33,7 +33,8 @@ missing are skipped with a message, and alerts go to the console until a channel
 | `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` | eBay Browse API (`ebay_api`) |
 | `BESTBUY_API_KEY` | Best Buy Products API (`api`) |
 | `DISCORD_WEBHOOK_URL` / `NTFY_TOPIC_URL` (+`NTFY_TOKEN`) / `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` / `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `ALERT_EMAIL_TO` (+`SMTP_PORT`, `SMTP_FROM`) | the alert channel set in `alerts.channel` |
-| `DEALFINDER_PASSWORD` | web app login; required unless it only listens on localhost |
+| `DEALFINDER_HOST` | web app address for `serve` (default `127.0.0.1`; `0.0.0.0` for the network) |
+| `DEALFINDER_PASSWORD` | web app login; required unless it only listens on localhost, where empty turns it off |
 | `DEALFINDER_SECRET` | keeps web logins valid across restarts |
 
 ## Commands

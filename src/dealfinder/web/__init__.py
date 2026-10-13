@@ -1,7 +1,8 @@
 """Small web app: deals feed, watchlist and site editing, site testing, run history.
 
 Server-rendered (Jinja) with htmx for the "test this site" button. Single user: every page
-needs the password in DEALFINDER_PASSWORD. Edits go straight to the YAML config (see
+needs the password in DEALFINDER_PASSWORD, unless it is empty and the app only listens on
+localhost (e.g. behind a tunnel that does its own login). Edits go straight to the YAML config (see
 config_edit), which `serve` reloads before its next run.
 """
 
